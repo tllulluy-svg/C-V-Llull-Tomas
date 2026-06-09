@@ -289,6 +289,166 @@ def seccion_historial():
 # SECCIÓN 3 — Administración de emisores
 # ─────────────────────────────────────────────────────────────
 
+CONCEPTOS_ETIQUETAS = {
+    "arancel": "Arancel",
+    "iva_arancel": "IVA s/Arancel",
+    "ret_iibb_sirtac": "Retención IIBB SIRTAC",
+    "per_iibb": "Percepción IIBB",
+    "per_iva": "Percepción IVA",
+    "otros": "Otros descuentos",
+}
+
+CONCEPTOS_OPCIONES = [
+    "Arancel",
+    "IVA s/Arancel",
+    "Retención IIBB SIRTAC",
+    "Percepción IIBB",
+    "Percepción IVA",
+    "Otros descuentos",
+]
+
+CONCEPTOS_CLAVES = {v: k for k, v in CONCEPTOS_ETIQUETAS.items()}
+
+
+def _renderizar_emisor(nombre, config, idx):
+    """Muestra un emisor como tarjeta visual sin código."""
+    identificadores = config.get("identificadores", [])
+    descuentos = config.get("descuentos", {})
+
+    with st.expander(f"**{nombre.upper()}**", expanded=False):
+        # Palabras clave de identificación
+        st.markdown("**Palabras clave que identifican este emisor en el PDF:**")
+        if identificadores:
+            cols = st.columns(min(len(identificadores), 4))
+            for i, ident in enumerate(identificadores):
+                cols[i % 4].markdown(
+                    f"<span style='background:#e8f4fd;padding:4px 10px;"
+                    f"border-radius:12px;font-size:0.85em;color:#1a73e8'>"
+                    f"🔍 {ident}</span>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("Sin palabras clave definidas.")
+
+        st.divider()
+
+        # Conceptos de descuento
+        st.markdown("**Conceptos y sus palabras clave en el PDF:**")
+        if descuentos:
+            for nombre_d, regla in descuentos.items():
+                etiqueta = CONCEPTOS_ETIQUETAS.get(nombre_d, nombre_d.replace("_", " ").title())
+                patron = regla.get("patron", "")
+                obligatorio = regla.get("obligatorio", False)
+                badge_oblig = (
+                    "<span style='background:#fce8e6;color:#c62828;padding:2px 7px;"
+                    "border-radius:10px;font-size:0.75em'>obligatorio</span>"
+                    if obligatorio
+                    else "<span style='background:#f1f3f4;color:#5f6368;padding:2px 7px;"
+                    "border-radius:10px;font-size:0.75em'>opcional</span>"
+                )
+                st.markdown(
+                    f"<div style='display:flex;align-items:center;gap:10px;margin:6px 0'>"
+                    f"<span style='min-width:180px;font-weight:500'>{etiqueta}</span>"
+                    f"<span style='background:#f8f9fa;border:1px solid #dadce0;padding:3px 10px;"
+                    f"border-radius:6px;font-family:monospace;font-size:0.85em'>{patron}</span>"
+                    f"{badge_oblig}</div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("Sin conceptos definidos.")
+
+        st.divider()
+
+        # Botón para editar
+        if st.button(f"✏️ Editar {nombre.upper()}", key=f"btn_editar_{idx}"):
+            st.session_state[f"editando_emisor"] = nombre
+            st.rerun()
+
+
+def _form_editar_emisor(nombre, config):
+    """Formulario de edición visual de un emisor."""
+    st.subheader(f"Editando: {nombre.upper()}")
+
+    identificadores_actuales = config.get("identificadores", [])
+    descuentos_actuales = config.get("descuentos", {})
+    campos_actuales = config.get("campos", {})
+
+    with st.form(f"form_editar_{nombre}"):
+        st.markdown("#### Palabras clave de identificación")
+        st.caption("Fragmentos de texto que aparecen en el PDF y permiten identificar el emisor.")
+
+        nuevos_ident = []
+        for i in range(5):
+            val = identificadores_actuales[i] if i < len(identificadores_actuales) else ""
+            inp = st.text_input(
+                f"Palabra clave {i+1}",
+                value=val,
+                placeholder="ej: fiserv o resumen mensual de liquidaciones",
+                key=f"edit_ident_{nombre}_{i}",
+            )
+            if inp.strip():
+                nuevos_ident.append(inp.strip())
+
+        st.divider()
+        st.markdown("#### Conceptos de descuento")
+        st.caption("Para cada concepto, escribí el texto exacto como aparece en el PDF.")
+
+        nuevos_descuentos = {}
+        conceptos_orden = list(CONCEPTOS_ETIQUETAS.items()) + [
+            (k, k.replace("_", " ").title())
+            for k in descuentos_actuales
+            if k not in CONCEPTOS_ETIQUETAS
+        ]
+
+        for clave, etiqueta in conceptos_orden:
+            regla_actual = descuentos_actuales.get(clave, {})
+            patron_actual = regla_actual.get("patron", "")
+            oblig_actual = regla_actual.get("obligatorio", False)
+
+            c1, c2, c3 = st.columns([2, 3, 1])
+            with c1:
+                st.markdown(f"**{etiqueta}**")
+            with c2:
+                patron_nuevo = st.text_input(
+                    "Texto en el PDF",
+                    value=patron_actual,
+                    placeholder="ej: arancel",
+                    key=f"edit_patron_{nombre}_{clave}",
+                    label_visibility="collapsed",
+                )
+            with c3:
+                oblig_nuevo = st.checkbox(
+                    "Oblig.",
+                    value=oblig_actual,
+                    key=f"edit_oblig_{nombre}_{clave}",
+                )
+            if patron_nuevo.strip():
+                nuevos_descuentos[clave] = {
+                    "patron": patron_nuevo.strip(),
+                    "tipo": regla_actual.get("tipo", "unico"),
+                    "obligatorio": oblig_nuevo,
+                }
+
+        col_g, col_c = st.columns(2)
+        with col_g:
+            guardar = st.form_submit_button("💾 Guardar cambios", type="primary")
+        with col_c:
+            cancelar = st.form_submit_button("Cancelar")
+
+    if guardar:
+        config["identificadores"] = nuevos_ident
+        config["descuentos"] = nuevos_descuentos
+        config["campos"] = campos_actuales
+        db.guardar_emisor(nombre, config)
+        del st.session_state["editando_emisor"]
+        st.success("Cambios guardados.")
+        st.rerun()
+
+    if cancelar:
+        del st.session_state["editando_emisor"]
+        st.rerun()
+
+
 def seccion_emisores():
     st.header("⚙️ Administración de emisores")
 
@@ -302,126 +462,154 @@ def seccion_emisores():
         if not emisores:
             st.info("No hay emisores configurados.")
         else:
-            for nombre, config in emisores.items():
-                with st.expander(f"📋 {nombre.upper()}"):
-                    st.json(config)
+            editando = st.session_state.get("editando_emisor")
+            if editando and editando in emisores:
+                _form_editar_emisor(editando, emisores[editando])
+            else:
+                for idx, (nombre, config) in enumerate(emisores.items()):
+                    _renderizar_emisor(nombre, config, idx)
 
     # ── Tab 2: Agregar nuevo emisor ───────────────────────────
     with tab_nuevo:
         st.subheader("Nuevo emisor")
+        st.caption("Completá los datos del nuevo emisor. Podés editar los detalles después desde la lista.")
+
         with st.form("form_nuevo_emisor"):
-            nombre_emisor = st.text_input("Nombre del emisor (ej: prisma)")
-            identificadores_raw = st.text_area(
-                "Palabras clave de identificación (una por línea)",
-                placeholder="prisma\nliquidacion prisma",
+            nombre_emisor = st.text_input(
+                "Nombre del emisor",
+                placeholder="ej: prisma",
             )
-            st.markdown("**Campos del encabezado** (patron → nombre del campo en el PDF)")
-            col_campos = {
-                "razon_social": st.text_input("Patrón razón social", placeholder="comercio"),
-                "cuit": st.text_input("Patrón CUIT", placeholder="cuit"),
-                "nro_comercio": st.text_input("Patrón N° comercio", placeholder="nro. comercio"),
-                "marca_tarjeta": st.text_input("Patrón marca tarjeta", placeholder="visa"),
-                "total_presentado": st.text_input("Patrón total presentado", placeholder="total bruto"),
-                "neto": st.text_input("Patrón neto", placeholder="importe neto"),
-            }
-            separador = st.text_input(
-                "Separador de bloques (dejar vacío si es bloque único)",
-                placeholder="f.de pago:",
-            )
-            st.markdown("**Descuentos** — Agregar hasta 6")
-            descuentos_nuevos = {}
-            for i in range(1, 7):
-                c1, c2, c3 = st.columns([2, 2, 1])
+
+            st.markdown("#### Palabras clave de identificación")
+            st.caption("Fragmentos de texto que aparecen en el PDF y permiten identificar el emisor.")
+            idents = []
+            for i in range(4):
+                val = st.text_input(
+                    f"Palabra clave {i+1}",
+                    placeholder="ej: prisma" if i == 0 else "ej: liquidacion prisma",
+                    key=f"new_ident_{i}",
+                )
+                if val.strip():
+                    idents.append(val.strip())
+
+            st.divider()
+            st.markdown("#### Conceptos de descuento")
+            st.caption("Para cada concepto que aparece en este PDF, escribí el texto que lo identifica.")
+
+            nuevos_descuentos = {}
+            for clave, etiqueta in CONCEPTOS_ETIQUETAS.items():
+                c1, c2, c3 = st.columns([2, 3, 1])
                 with c1:
-                    nombre_d = st.text_input(f"Nombre descuento {i}", key=f"d_nombre_{i}")
+                    st.markdown(f"**{etiqueta}**")
                 with c2:
-                    patron_d = st.text_input(f"Patrón {i}", key=f"d_patron_{i}")
+                    patron = st.text_input(
+                        "Texto en el PDF",
+                        placeholder="ej: arancel",
+                        key=f"new_patron_{clave}",
+                        label_visibility="collapsed",
+                    )
                 with c3:
-                    oblig_d = st.checkbox(f"Oblig.", key=f"d_oblig_{i}")
-                if nombre_d and patron_d:
-                    descuentos_nuevos[nombre_d] = {
-                        "patron": patron_d,
+                    oblig = st.checkbox("Oblig.", key=f"new_oblig_{clave}")
+                if patron.strip():
+                    nuevos_descuentos[clave] = {
+                        "patron": patron.strip(),
                         "tipo": "unico",
-                        "obligatorio": oblig_d,
+                        "obligatorio": oblig,
                     }
 
-            submitted = st.form_submit_button("Guardar emisor")
+            submitted = st.form_submit_button("Guardar emisor", type="primary")
             if submitted:
-                if not nombre_emisor:
+                if not nombre_emisor.strip():
                     st.error("El nombre del emisor es obligatorio.")
+                elif not idents:
+                    st.error("Agregá al menos una palabra clave de identificación.")
                 else:
-                    datos = {
-                        "identificadores": [
-                            l.strip() for l in identificadores_raw.split("\n") if l.strip()
-                        ],
-                        "campos": {k: v for k, v in col_campos.items() if v},
-                        "descuentos": descuentos_nuevos,
-                        "separador_bloque": separador if separador else None,
-                    }
-                    db.guardar_emisor(nombre_emisor.lower().strip(), datos)
-                    st.success(f"Emisor '{nombre_emisor}' guardado correctamente.")
+                    db.guardar_emisor(nombre_emisor.lower().strip(), {
+                        "identificadores": idents,
+                        "campos": {},
+                        "descuentos": nuevos_descuentos,
+                        "separador_bloque": None,
+                    })
+                    st.success(f"Emisor '{nombre_emisor.upper()}' guardado. Podés editarlo desde la lista.")
                     st.rerun()
 
-        # Sub-sección: probar emisor con PDF
-        st.subheader("Probar emisor con PDF")
-        pdf_prueba = st.file_uploader("Subí un PDF para probar la extracción", type=["pdf"], key="pdf_prueba")
+        # Probar con PDF
+        st.divider()
+        st.subheader("Probar con un PDF")
+        st.caption("Subí un PDF para verificar qué extrae la herramienta antes de configurar.")
+        pdf_prueba = st.file_uploader("Seleccionar PDF de prueba", type=["pdf"], key="pdf_prueba")
         if pdf_prueba and st.button("Probar extracción", key="btn_probar"):
             with st.spinner("Procesando..."):
-                resultado_prueba = extractor.procesar_pdf(pdf_prueba)
-            st.subheader("Resultado de prueba")
-            if "error" in resultado_prueba:
-                st.error(resultado_prueba["error"])
+                res = extractor.procesar_pdf(pdf_prueba)
+            if "error" in res:
+                st.error(res["error"])
             else:
-                st.json({
-                    k: v for k, v in resultado_prueba.items()
-                    if k != "sin_categorizar_detalle"
-                })
-                if resultado_prueba.get("sin_categorizar_detalle"):
-                    st.warning("Conceptos sin categorizar detectados:")
-                    for item in resultado_prueba["sin_categorizar_detalle"]:
-                        st.text(f"  {item['texto']}  →  {fmt_monto(item['monto'])}")
+                st.success(f"Emisor detectado: **{res.get('emisor', '').upper()}**")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**Razón Social:** {res.get('razon_social', '-')}")
+                    st.markdown(f"**CUIT:** {res.get('cuit', '-')}")
+                    st.markdown(f"**N° Comercio:** {res.get('nro_comercio', '-')}")
+                with col2:
+                    st.markdown(f"**Total Presentado:** {fmt_monto(res.get('total_presentado', 0))}")
+                    st.markdown(f"**Neto Acreditado:** {fmt_monto(res.get('neto_acreditado', 0))}")
+                st.markdown("**Descuentos detectados:**")
+                for clave, etiqueta in CONCEPTOS_ETIQUETAS.items():
+                    val = res.get(clave, 0.0)
+                    if val:
+                        st.markdown(f"- {etiqueta}: {fmt_monto(val)}")
+                if res.get("sin_categorizar_detalle"):
+                    st.warning("Conceptos no reconocidos en el PDF:")
+                    for item in res["sin_categorizar_detalle"]:
+                        st.markdown(f"- `{item['texto']}` → {fmt_monto(item['monto'])}")
 
     # ── Tab 3: Conceptos sin categorizar ─────────────────────
     with tab_sin_cat:
         conceptos = db.obtener_conceptos_sin_categorizar()
         if not conceptos:
-            st.info("No hay conceptos sin categorizar pendientes.")
+            st.info("No hay conceptos pendientes de categorizar.")
         else:
             st.info(
-                f"Hay **{len(conceptos)}** concepto(s) sin categorizar. "
-                "Podés convertirlos en regla para futuros PDFs."
+                f"**{len(conceptos)}** concepto(s) encontrados en PDFs anteriores que no pudieron "
+                "identificarse automáticamente. Asignales un concepto para que se reconozcan en el futuro."
             )
             for concepto in conceptos:
                 with st.expander(
-                    f"[{concepto['emisor'].upper()}] {concepto['texto_original'][:60]}  →  {fmt_monto(concepto['monto'])}"
+                    f"{concepto['emisor'].upper()} · {concepto['texto_original'][:55]} · {fmt_monto(concepto['monto'])}"
                 ):
-                    st.text(f"Emisor: {concepto['emisor']}")
-                    st.text(f"Texto: {concepto['texto_original']}")
-                    st.text(f"Monto: {fmt_monto(concepto['monto'])}")
-                    st.text(f"Fecha: {concepto['fecha']}")
-                    with st.form(f"form_convertir_{concepto['id']}"):
-                        nombre_regla = st.text_input("Nombre de la regla", key=f"regla_nombre_{concepto['id']}")
-                        patron_regla = st.text_input(
-                            "Patrón (texto a buscar)",
-                            value=concepto["texto_original"][:40],
-                            key=f"regla_patron_{concepto['id']}",
+                    st.markdown(f"**Emisor:** {concepto['emisor'].upper()}")
+                    st.markdown(f"**Texto en el PDF:** `{concepto['texto_original']}`")
+                    st.markdown(f"**Monto:** {fmt_monto(concepto['monto'])}")
+                    st.markdown(f"**Fecha:** {concepto['fecha']}")
+                    st.divider()
+                    st.markdown("**¿A qué concepto corresponde?**")
+                    with st.form(f"form_cat_{concepto['id']}"):
+                        concepto_sel = st.selectbox(
+                            "Concepto",
+                            options=CONCEPTOS_OPCIONES,
+                            key=f"sel_concepto_{concepto['id']}",
+                            label_visibility="collapsed",
                         )
-                        oblig_regla = st.checkbox("Obligatorio", key=f"regla_oblig_{concepto['id']}")
-                        if st.form_submit_button("Convertir en regla"):
-                            if nombre_regla and patron_regla:
-                                emisores_db = db.obtener_emisores()
-                                config_emisor = emisores_db.get(concepto["emisor"], {})
-                                descuentos_actuales = config_emisor.get("descuentos", {})
-                                descuentos_actuales[nombre_regla] = {
-                                    "patron": patron_regla,
-                                    "tipo": "unico",
-                                    "obligatorio": oblig_regla,
-                                }
-                                config_emisor["descuentos"] = descuentos_actuales
-                                db.guardar_emisor(concepto["emisor"], config_emisor)
-                                db.marcar_concepto_convertido(concepto["id"])
-                                st.success("Regla guardada y concepto marcado como convertido.")
-                                st.rerun()
+                        texto_clave = st.text_input(
+                            "Texto a buscar en el PDF (podés ajustarlo)",
+                            value=concepto["texto_original"][:50],
+                            key=f"texto_clave_{concepto['id']}",
+                        )
+                        if st.form_submit_button("Asignar concepto"):
+                            clave_interna = CONCEPTOS_CLAVES.get(concepto_sel, concepto_sel.lower().replace(" ", "_"))
+                            emisores_db = db.obtener_emisores()
+                            config_emisor = emisores_db.get(concepto["emisor"], {})
+                            descuentos_act = config_emisor.get("descuentos", {})
+                            descuentos_act[clave_interna] = {
+                                "patron": texto_clave.strip(),
+                                "tipo": "unico",
+                                "obligatorio": False,
+                            }
+                            config_emisor["descuentos"] = descuentos_act
+                            db.guardar_emisor(concepto["emisor"], config_emisor)
+                            db.marcar_concepto_convertido(concepto["id"])
+                            st.success(f"Asignado como '{concepto_sel}'. Se usará en futuros PDFs.")
+                            st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────
