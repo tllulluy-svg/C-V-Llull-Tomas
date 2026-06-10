@@ -83,6 +83,23 @@ def extraer_encabezado(texto: str, emisor: str) -> dict:
     return resultado
 
 
+def _texto_para_totales(texto: str, separador_resumen: str) -> str:
+    """
+    Si el emisor tiene separador_resumen, retorna solo el texto
+    a partir de ese marcador (donde están los totales del período).
+    Si no hay separador o no se encuentra, retorna el texto completo.
+    """
+    if not separador_resumen:
+        return texto
+    sep_norm = normalizar_texto(separador_resumen)
+    texto_norm = normalizar_texto(texto)
+    idx = texto_norm.find(sep_norm)
+    if idx == -1:
+        return texto
+    # Retornar desde el separador en adelante (usando el texto original)
+    return texto[idx:]
+
+
 def dividir_en_bloques(texto: str, separador: str) -> list:
     """
     Divide el texto del PDF en bloques usando el separador del diccionario.
@@ -92,9 +109,7 @@ def dividir_en_bloques(texto: str, separador: str) -> list:
         return [texto]
     sep_norm = normalizar_texto(separador)
     texto_norm = normalizar_texto(texto)
-    # Encontrar posiciones del separador en el texto normalizado
     partes = re.split(re.escape(sep_norm), texto_norm)
-    # Si no hay separadores, retornar texto completo
     if len(partes) <= 1:
         return [texto]
     return partes
@@ -227,9 +242,13 @@ def procesar_pdf(archivo, emisor_forzado: str = None) -> dict:
         emisores = _cargar_emisores()
         config = emisores[emisor]
         separador = config.get("separador_bloque")
+        separador_resumen = config.get("separador_resumen")
 
+        # Para emisores con resumen al final (ej: Payway), extraer encabezado
+        # del texto completo y descuentos solo desde la sección de totales
         encabezado = extraer_encabezado(texto_completo, emisor)
-        bloques = dividir_en_bloques(texto_completo, separador)
+        texto_totales = _texto_para_totales(texto_completo, separador_resumen)
+        bloques = dividir_en_bloques(texto_totales, separador)
         descuentos = acumular_descuentos(bloques, emisor)
 
         # Calcular neto desde total presentado y descuentos

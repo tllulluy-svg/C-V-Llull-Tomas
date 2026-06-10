@@ -11,6 +11,14 @@ def _conexion():
     return sqlite3.connect(DB_PATH)
 
 
+def _migrar_db(conn):
+    """Agrega columnas nuevas a tablas existentes si todavía no están."""
+    try:
+        conn.execute("ALTER TABLE emisores_config ADD COLUMN separador_resumen TEXT")
+    except Exception:
+        pass  # Ya existe
+
+
 def crear_tablas():
     """Crea las tablas necesarias si no existen."""
     with _conexion() as conn:
@@ -41,8 +49,11 @@ def crear_tablas():
                 identificadores TEXT,
                 campos TEXT,
                 descuentos TEXT,
-                separador_bloque TEXT
+                separador_bloque TEXT,
+                separador_resumen TEXT
             );
+            -- migración: agregar columna si no existe (SQLite ignora el error si ya existe)
+
 
             CREATE TABLE IF NOT EXISTS conceptos_sin_categorizar (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +64,7 @@ def crear_tablas():
                 convertido INTEGER DEFAULT 0
             );
         """)
+        _migrar_db(conn)
 
 
 def guardar_liquidacion(datos: dict):
@@ -109,6 +121,7 @@ def obtener_emisores():
             "campos": json.loads(r["campos"]),
             "descuentos": json.loads(r["descuentos"]),
             "separador_bloque": r["separador_bloque"],
+            "separador_resumen": r["separador_resumen"],
         }
     return resultado
 
@@ -116,13 +129,14 @@ def obtener_emisores():
 def guardar_emisor(nombre: str, datos: dict):
     """Inserta o actualiza un emisor en emisores_config."""
     sql = """
-        INSERT INTO emisores_config (nombre, identificadores, campos, descuentos, separador_bloque)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO emisores_config (nombre, identificadores, campos, descuentos, separador_bloque, separador_resumen)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(nombre) DO UPDATE SET
             identificadores=excluded.identificadores,
             campos=excluded.campos,
             descuentos=excluded.descuentos,
-            separador_bloque=excluded.separador_bloque
+            separador_bloque=excluded.separador_bloque,
+            separador_resumen=excluded.separador_resumen
     """
     with _conexion() as conn:
         conn.execute(sql, (
@@ -131,6 +145,7 @@ def guardar_emisor(nombre: str, datos: dict):
             json.dumps(datos.get("campos", {}), ensure_ascii=False),
             json.dumps(datos.get("descuentos", {}), ensure_ascii=False),
             datos.get("separador_bloque"),
+            datos.get("separador_resumen"),
         ))
 
 

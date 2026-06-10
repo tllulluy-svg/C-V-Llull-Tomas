@@ -361,6 +361,16 @@ def _renderizar_emisor(nombre, config, idx):
         else:
             st.caption("Sin conceptos definidos.")
 
+        sep_res = config.get("separador_resumen")
+        if sep_res:
+            st.divider()
+            st.markdown("**Inicio del resumen de totales:**")
+            st.markdown(
+                f"<span style='background:#fff3e0;padding:4px 10px;border-radius:6px;"
+                f"font-family:monospace;font-size:0.85em;color:#e65100'>📍 {sep_res}</span>",
+                unsafe_allow_html=True,
+            )
+
         st.divider()
 
         # Botón para editar
@@ -394,8 +404,23 @@ def _form_editar_emisor(nombre, config):
                 nuevos_ident.append(inp.strip())
 
         st.divider()
+        st.markdown("#### Inicio del resumen de totales")
+        st.caption(
+            "Texto que marca dónde empieza la hoja de totales del PDF. "
+            "Todo lo anterior (páginas diarias) se ignora para los descuentos. "
+            "Dejá vacío si no aplica."
+        )
+        sep_resumen_actual = config.get("separador_resumen") or ""
+        sep_resumen_nuevo = st.text_input(
+            "Texto que marca el inicio del resumen",
+            value=sep_resumen_actual,
+            placeholder="ej: DESGLOSE DE DESCUENTOS",
+            key=f"edit_sep_resumen_{nombre}",
+        )
+
+        st.divider()
         st.markdown("#### Conceptos de descuento")
-        st.caption("Para cada concepto, escribí el texto exacto como aparece en el PDF.")
+        st.caption("Para cada concepto, escribí el texto exacto como aparece en el PDF. Podés usar | para alternativas: ej: arancel tj.|arancel credito")
 
         nuevos_descuentos = {}
         conceptos_orden = list(CONCEPTOS_ETIQUETAS.items()) + [
@@ -443,6 +468,7 @@ def _form_editar_emisor(nombre, config):
         config["identificadores"] = nuevos_ident
         config["descuentos"] = nuevos_descuentos
         config["campos"] = campos_actuales
+        config["separador_resumen"] = sep_resumen_nuevo.strip() or None
         db.guardar_emisor(nombre, config)
         del st.session_state["editando_emisor"]
         st.success("Cambios guardados.")
