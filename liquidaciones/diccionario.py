@@ -162,38 +162,48 @@ EMISORES = {
             "payway",
             "pay way",
             "liquidacion payway",
+            "servicio payway",
         ],
         "campos": {
             "razon_social": "razon social",
             "cuit": "cuit",
             "nro_comercio": "nro. comercio",
-            "marca_tarjeta": "visa",
-            "total_presentado": "importe bruto",
-            "neto": "importe neto",
+            "marca_tarjeta": "payway",
+            # El total del mes está como "SALDO $" en la última hoja
+            "total_presentado": "saldo $",
+            # El neto se calcula; como respaldo buscamos "neto percibido"
+            "neto": "neto percibido",
         },
         "descuentos": {
+            # Arancel aparece en múltiples líneas: Arancel Tj.Crédito / Tj.Débito
+            # tipo "acumulable" hace que el extractor sume todas las ocurrencias
             "arancel": {
-                "patron": "arancel",
-                "tipo": "unico",
+                "patron": "arancel tj.",
+                "tipo": "acumulable",
                 "obligatorio": True,
             },
             "iva_arancel": {
-                "patron": "iva s/arancel",
+                "patron": "iva 21",
                 "tipo": "unico",
                 "obligatorio": True,
             },
-            "ret_iibb_sirtac": {
-                "patron": "ret. iibb sirtac",
+            "per_iibb": {
+                "patron": "perc. ib buenos aires",
                 "tipo": "unico",
                 "obligatorio": False,
             },
-            "per_iibb": {
-                "patron": "per. iibb",
+            "ret_iibb_sirtac": {
+                "patron": "ret.ib sirtac",
                 "tipo": "unico",
                 "obligatorio": False,
             },
             "per_iva": {
-                "patron": "per. iva",
+                "patron": "percep./retenc.afip",
+                "tipo": "unico",
+                "obligatorio": False,
+            },
+            "otros": {
+                "patron": "servicio costes financieros",
                 "tipo": "unico",
                 "obligatorio": False,
             },

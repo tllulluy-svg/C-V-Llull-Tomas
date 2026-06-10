@@ -117,9 +117,14 @@ def extraer_descuentos_bloque(bloque: str, emisor: str) -> dict:
 
     for nombre, regla in descuentos_config.items():
         patron = regla.get("patron", "")
+        tipo = regla.get("tipo", "unico")
         if patron:
-            monto = extraer_monto_regex(bloque, patron)
-            resultado[nombre] = monto
+            if tipo == "acumulable":
+                # Suma todas las ocurrencias del patrón (ej: Arancel Tj.Crédito, Tj.Débito…)
+                montos = extraer_todos_montos_regex(bloque, patron)
+                resultado[nombre] = sum(montos)
+            else:
+                resultado[nombre] = extraer_monto_regex(bloque, patron)
 
     # Detectar posibles montos no categorizados
     # Buscar líneas con montos que no matcheen ninguna regla conocida

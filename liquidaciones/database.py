@@ -135,11 +135,13 @@ def guardar_emisor(nombre: str, datos: dict):
 
 
 def sincronizar_emisores_desde_diccionario(emisores_dict: dict):
-    """Carga el diccionario base en SQLite si el emisor aún no existe."""
-    existentes = set(obtener_emisores().keys())
+    """
+    Sincroniza el diccionario base en SQLite.
+    Inserta emisores nuevos y actualiza los existentes que vengan del diccionario base
+    (no sobreescribe emisores creados manualmente que no estén en el diccionario base).
+    """
     for nombre, datos in emisores_dict.items():
-        if nombre not in existentes:
-            guardar_emisor(nombre, datos)
+        guardar_emisor(nombre, datos)
 
 
 def guardar_concepto_sin_categorizar(texto: str, monto: float, emisor: str):
