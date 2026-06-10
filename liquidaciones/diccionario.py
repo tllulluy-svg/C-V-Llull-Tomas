@@ -166,7 +166,7 @@ EMISORES = {
         ],
         # Texto que marca el inicio de la hoja de resumen final.
         # Todo lo anterior (páginas diarias) se ignora para los descuentos.
-        "separador_resumen": "DESGLOSE DE DESCUENTOS",
+        "separador_resumen": "DETALLE DE LAS TRANSACCIONES",
         "campos": {
             "razon_social": "razon social",
             "cuit": "cuit",
