@@ -193,9 +193,10 @@ def validar_neto(neto_calculado: float, neto_encabezado: float) -> dict:
     }
 
 
-def procesar_pdf(archivo) -> dict:
+def procesar_pdf(archivo, emisor_forzado: str = None) -> dict:
     """
     Función principal. Orquesta todo el flujo de extracción.
+    Si se pasa emisor_forzado se omite la auto-detección.
     Retorna objeto resultado completo o dict con error.
     """
     try:
@@ -208,10 +209,17 @@ def procesar_pdf(archivo) -> dict:
         if not texto_completo.strip():
             return {"error": "El PDF no contiene texto extraíble (puede ser imagen)."}
 
-        emisor = identificar_emisor(texto_completo)
+        if emisor_forzado:
+            emisores = _cargar_emisores()
+            if emisor_forzado not in emisores:
+                return {"error": f"El emisor '{emisor_forzado}' no está configurado."}
+            emisor = emisor_forzado
+        else:
+            emisor = identificar_emisor(texto_completo)
+
         if emisor == "desconocido":
             return {
-                "error": "Emisor no reconocido.",
+                "error": "Emisor no reconocido. Seleccionalo manualmente desde el selector.",
                 "emisor": "desconocido",
                 "texto_muestra": texto_completo[:500],
             }

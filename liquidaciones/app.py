@@ -40,17 +40,25 @@ def fmt_monto(valor):
 
 
 def _estado_inicial():
-    if "cola_pdfs" not in st.session_state:
-        st.session_state.cola_pdfs = []
-    if "indice_actual" not in st.session_state:
-        st.session_state.indice_actual = 0
-    if "resultado_actual" not in st.session_state:
-        st.session_state.resultado_actual = None
-    if "periodo_actual" not in st.session_state:
-        st.session_state.periodo_actual = ""
+    defaults = {
+        "pdf_actual": None,
+        "resultado_actual": None,
+        "periodo_actual": "",
+        "emisor_forzado": None,
+        "procesando": False,
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 
 _estado_inicial()
+
+
+def _emisores_disponibles():
+    """Retorna lista de emisores para el selector."""
+    emisores = db.obtener_emisores()
+    return ["Auto-detectar"] + [e.upper() for e in sorted(emisores.keys())]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -58,65 +66,61 @@ _estado_inicial()
 # ─────────────────────────────────────────────────────────────
 
 def seccion_carga():
-    st.header("📂 Carga y procesamiento de PDFs")
+    st.header("📂 Carga de liquidación")
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        archivos = st.file_uploader(
-            "Seleccioná uno o más archivos PDF",
-            type=["pdf"],
-            accept_multiple_files=True,
-            key="uploader",
-        )
-    with col2:
-        periodo = st.text_input(
-            "Período (MM/AAAA)",
-            placeholder="01/2025",
-            key="periodo_input",
-        )
+    # ── Panel de configuración (siempre visible cuando no hay PDF en proceso) ──
+    if st.session_state.resultado_actual is None:
+        col1, col2, col3 = st.columns([3, 1, 2])
+        with col1:
+            archivo = st.file_uploader(
+                "Seleccioná un PDF",
+                type=["pdf"],
+                accept_multiple_files=False,
+                key="uploader",
+            )
+        with col2:
+            periodo = st.text_input(
+                "Período",
+                placeholder="01/2025",
+                key="periodo_input",
+            )
+        with col3:
+            opciones_emisor = _emisores_disponibles()
+            emisor_sel = st.selectbox(
+                "Emisor",
+                options=opciones_emisor,
+                key="sel_emisor",
+                help="Seleccioná el emisor si sabés cuál es. 'Auto-detectar' lo busca automáticamente.",
+            )
 
-    if archivos and st.button("Procesar PDFs", type="primary"):
-        st.session_state.cola_pdfs = archivos
-        st.session_state.indice_actual = 0
-        st.session_state.resultado_actual = None
-        st.session_state.periodo_actual = periodo
-        st.rerun()
+        if archivo:
+            if st.button("Analizar PDF", type="primary"):
+                emisor_forzado = None if emisor_sel == "Auto-detectar" else emisor_sel.lower()
+                with st.spinner("Extrayendo datos del PDF..."):
+                    resultado = extractor.procesar_pdf(archivo, emisor_forzado=emisor_forzado)
+                st.session_state.resultado_actual = resultado
+                st.session_state.periodo_actual = periodo
+                st.session_state.pdf_actual = archivo.name
+                st.rerun()
+        return
 
-    # Mostrar resumen del PDF actual en la cola
-    if st.session_state.cola_pdfs:
-        idx = st.session_state.indice_actual
-        total = len(st.session_state.cola_pdfs)
+    # ── Hay resultado para revisar ──
+    resultado = st.session_state.resultado_actual
+    st.info(f"📄 **{st.session_state.pdf_actual}**")
 
-        if idx >= total:
-            st.success(f"✅ Se procesaron los {total} PDFs.")
-            st.session_state.cola_pdfs = []
-            st.session_state.indice_actual = 0
+    if "error" in resultado:
+        st.error(f"⚠️ {resultado['error']}")
+        if resultado.get("emisor") == "desconocido":
+            st.info("El emisor no se reconoció. Podés seleccionarlo manualmente desde el selector de arriba.")
+            if resultado.get("texto_muestra"):
+                with st.expander("Ver muestra del texto extraído"):
+                    st.text(resultado["texto_muestra"])
+        if st.button("Intentar con otro emisor / Cancelar"):
             st.session_state.resultado_actual = None
-            return
+            st.rerun()
+        return
 
-        archivo = st.session_state.cola_pdfs[idx]
-        st.info(f"Procesando {idx + 1} de {total}: **{archivo.name}**")
-
-        if st.session_state.resultado_actual is None:
-            with st.spinner("Extrayendo datos del PDF..."):
-                st.session_state.resultado_actual = extractor.procesar_pdf(archivo)
-
-        resultado = st.session_state.resultado_actual
-
-        if "error" in resultado:
-            st.error(f"⚠️ {resultado['error']}")
-            if resultado.get("emisor") == "desconocido":
-                st.info("Este emisor no está configurado. Podés agregarlo en la sección **Administración de emisores**.")
-                if resultado.get("texto_muestra"):
-                    with st.expander("Ver muestra del texto extraído"):
-                        st.text(resultado["texto_muestra"])
-            col_desc, col_sig = st.columns(2)
-            with col_desc:
-                if st.button("Descartar y continuar", key="btn_descartar_error"):
-                    _avanzar_cola()
-            return
-
-        mostrar_resumen(resultado)
+    mostrar_resumen(resultado)
 
 
 def mostrar_resumen(r: dict):
@@ -181,7 +185,7 @@ def mostrar_resumen(r: dict):
             _guardar_y_avanzar(r)
     with col_desc:
         if st.button("🗑️ Descartar", key="btn_descartar"):
-            _avanzar_cola()
+            _limpiar_resultado()
 
 
 def _guardar_y_avanzar(resultado: dict):
@@ -211,12 +215,12 @@ def _guardar_y_avanzar(resultado: dict):
         )
 
     st.toast("Liquidación guardada correctamente.")
-    _avanzar_cola()
+    _limpiar_resultado()
 
 
-def _avanzar_cola():
-    st.session_state.indice_actual += 1
+def _limpiar_resultado():
     st.session_state.resultado_actual = None
+    st.session_state.pdf_actual = None
     st.rerun()
 
 

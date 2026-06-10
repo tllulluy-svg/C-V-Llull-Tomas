@@ -169,41 +169,81 @@ EMISORES = {
             "cuit": "cuit",
             "nro_comercio": "nro. comercio",
             "marca_tarjeta": "payway",
-            # El total del mes está como "SALDO $" en la última hoja
-            "total_presentado": "saldo $",
-            # El neto se calcula; como respaldo buscamos "neto percibido"
-            "neto": "neto percibido",
+            "total_presentado": "saldo $|saldo pesos",
+            "neto": "neto percibido|importe neto",
         },
         "descuentos": {
-            # Arancel aparece en múltiples líneas: Arancel Tj.Crédito / Tj.Débito
-            # tipo "acumulable" hace que el extractor sume todas las ocurrencias
+            # | permite buscar múltiples formas del mismo concepto
             "arancel": {
-                "patron": "arancel tj.",
+                "patron": "arancel tj.|arancel tarjeta|arancel credito|arancel debito",
                 "tipo": "acumulable",
                 "obligatorio": True,
             },
             "iva_arancel": {
-                "patron": "iva 21",
+                "patron": "iva 21|iva s/arancel|iva sobre arancel",
                 "tipo": "unico",
                 "obligatorio": True,
             },
             "per_iibb": {
-                "patron": "perc. ib buenos aires",
+                "patron": "perc. ib buenos aires|percepcion iibb|per. iibb|perc.ib bs.as",
                 "tipo": "unico",
                 "obligatorio": False,
             },
             "ret_iibb_sirtac": {
-                "patron": "ret.ib sirtac",
+                "patron": "ret.ib sirtac|ret. iibb sirtac|retencion sirtac",
                 "tipo": "unico",
                 "obligatorio": False,
             },
             "per_iva": {
-                "patron": "percep./retenc.afip",
+                "patron": "percep./retenc.afip|percepcion iva|per. iva|retenc.afip",
                 "tipo": "unico",
                 "obligatorio": False,
             },
             "otros": {
-                "patron": "servicio costes financieros",
+                "patron": "servicio costes financieros|costo financiero",
+                "tipo": "unico",
+                "obligatorio": False,
+            },
+        },
+        "separador_bloque": None,
+    },
+    "clover": {
+        "identificadores": [
+            "clover",
+            "liquidacion clover",
+            "resumen clover",
+        ],
+        "campos": {
+            "razon_social": "razon social|comercio",
+            "cuit": "cuit",
+            "nro_comercio": "nro. comercio|nro comercio",
+            "marca_tarjeta": "clover",
+            "total_presentado": "total presentado|importe bruto|total bruto",
+            "neto": "neto acreditado|importe neto|neto a acreditar",
+        },
+        "descuentos": {
+            "arancel": {
+                "patron": "arancel|comision",
+                "tipo": "unico",
+                "obligatorio": True,
+            },
+            "iva_arancel": {
+                "patron": "iva s/arancel|iva arancel|iva 21",
+                "tipo": "unico",
+                "obligatorio": True,
+            },
+            "per_iibb": {
+                "patron": "percepcion iibb|per. iibb|perc. ib",
+                "tipo": "unico",
+                "obligatorio": False,
+            },
+            "ret_iibb_sirtac": {
+                "patron": "retencion sirtac|ret. iibb sirtac|ret.ib sirtac",
+                "tipo": "unico",
+                "obligatorio": False,
+            },
+            "per_iva": {
+                "patron": "percepcion iva|per. iva|percep. iva",
                 "tipo": "unico",
                 "obligatorio": False,
             },
